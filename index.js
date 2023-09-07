@@ -36,10 +36,36 @@ async function run() {
       const result = await watchesCollection.find({}).toArray();
       res.send(result);
     });
+    app.get("/watchData/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await watchesCollection.findOne(query);
+      res.send(result);
+    });
 
     app.post("/watchData", async (req, res) => {
       const newItem = req.body;
       const result = await watchesCollection.insertOne(newItem);
+      res.send(result);
+    });
+    app.put("/watchData/:id", async (req, res) => {
+      const id = req.params.id;
+      const newItem = req.body;
+      const query = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          name: newItem.name,
+          price: newItem.price,
+          image: newItem.image,
+          details: newItem.details,
+        },
+      };
+      const result = await watchesCollection.updateOne(
+        query,
+        updateDoc,
+        options
+      );
       res.send(result);
     });
 
