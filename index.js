@@ -3,6 +3,7 @@ const app = express();
 const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
 const port = process.env.PORT || 5000;
 
@@ -30,6 +31,7 @@ async function run() {
     const reviewCollection = client.db("watchShopDb").collection("reviews");
     const cartsCollection = client.db("watchShopDb").collection("carts");
     const usersCollection = client.db("watchShopDb").collection("users");
+    const paymentCollection = client.db("watchShopDb").collection("payments");
 
     // api routes
     app.get("/watchData", async (req, res) => {
@@ -146,6 +148,33 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const result = await usersCollection.deleteOne(query);
       res.send(result);
+    });
+
+    // payment api
+
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
+
+      const amount = price * 100;
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+
+    app.post("/payment", async (req, res) => {
+      const payment = req.body;
+      const insertedResult = await paymentCollection.insertOne(payment);
+      const query = {
+        _id: { $in: payment.cartItems.map((id) => new ObjectId(id)) },
+      };
+      const deletedResult = await cartsCollection.deleteMany(query);
+      res.send({ insertedResult, deletedResult });
     });
 
     await client.db("admin").command({ ping: 1 });
