@@ -37,6 +37,12 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/watchData", async (req, res) => {
+      const newItem = req.body;
+      const result = await watchesCollection.insertOne(newItem);
+      res.send(result);
+    });
+
     app.delete("/watchData/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
