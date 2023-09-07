@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 require("dotenv").config();
+const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
@@ -10,6 +11,26 @@ const port = process.env.PORT || 5000;
 //middleware
 app.use(cors());
 app.use(express.json());
+
+// data security api
+const verifyJWT = (req, res, next) => {
+  const authToken = req.headers.authorization;
+  if (!authToken) {
+    return res
+      .status(401)
+      .send({ error: true, message: "unauthorized access" });
+  }
+  const token = authToken.split(" ")[1];
+  jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
+    if (err) {
+      return res
+        .status(401)
+        .send({ error: true, message: "unauthorized access" });
+    }
+    req.decoded = decoded;
+    next();
+  });
+};
 
 // Mongodb connect
 
@@ -32,6 +53,15 @@ async function run() {
     const cartsCollection = client.db("watchShopDb").collection("carts");
     const usersCollection = client.db("watchShopDb").collection("users");
     const paymentCollection = client.db("watchShopDb").collection("payments");
+
+    // jwt api
+    app.post("/jwt", (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN, {
+        expiresIn: "1d",
+      });
+      res.send({ token });
+    });
 
     // api routes
     app.get("/watchData", async (req, res) => {
@@ -91,8 +121,12 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/carts/:email", async (req, res) => {
+    app.get("/carts/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
+      const decodedEmail = req.decoded.email;
+      if (email !== decodedEmail) {
+        res.status(403).send({ error: true, message: "forbidden access" });
+      }
       const query = { email: email };
       const result = await cartsCollection.find(query).toArray();
       res.send(result);
@@ -119,13 +153,19 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyJWT, async (req, res) => {
       const result = await usersCollection.find({}).toArray();
       res.send(result);
     });
 
-    app.get("/users/admin/:email", async (req, res) => {
+    app.get("/users/admin/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
+      const decodedEmail = req.decoded.email;
+      if (decodedEmail !== email) {
+        return res
+          .status(403)
+          .send({ error: true, message: "forbidden access" });
+      }
       const query = { email: email };
       const user = await usersCollection.findOne(query);
       const result = { admin: user?.role === "admin" };
